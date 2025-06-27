@@ -1,7 +1,8 @@
 import os
 import subprocess
+from google.genai import types
 
-def run_python_file(working_directory, file_path):
+def run_python_file(working_directory, file_path, args=None):
     abs_working_dir = os.path.abspath(working_directory)
     target_path = os.path.abspath(os.path.join(abs_working_dir, file_path))
     if not target_path.startswith(abs_working_dir):
@@ -11,15 +12,40 @@ def run_python_file(working_directory, file_path):
     if not target_path.endswith(".py"):
         return f'Error: "{file_path}" is not a Python file.'
     try:
-        print(target_path)
-        result = subprocess.run(["python3", target_path], capture_output=True, text=True, check=True, timeout=30)
+        commands = ["python3", target_path]
+        if args:
+            commands.extend(args)
+        result = subprocess.run(commands, capture_output=True, text=True, check=True, timeout=30, cwd=abs_working_dir)
+        output = []
         if result.stdout:
-            return f"STDOUT: {result.stdout}", f"STDERR: {result.stderr}"
-        else:
-            return "No output produced."
-
-    except subprocess.CalledProcessError as e:
-        return f"Process exited with code {e.returncode}" 
+            output.append((f"STDOUT:\n{result.stdout}"))
+        if result.stderr:
+            output.append(f"STDERR:\n{result.stderr}")
+        if result.returncode != 0:
+            output.append(f"Process exited with code {result.returncode}")
+        return "\n".join(output) if output else "No output produced."
     except Exception as e:
         return f"Error: executing Python file: {e}"
-    return target_path
+
+schema_run_python_file = types.FunctionDeclaration(
+    name="run_python_file",
+    description="Executes a Python file within the working directory and returns the output from the interpreter.",
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "file_path": types.Schema(
+                type=types.Type.STRING,
+                description="Path to the Python file to execute, relative to the working directory.",
+            ),
+            "args": types.Schema(
+                type=types.Type.ARRAY,
+                items=types.Schema(
+                    type=types.Type.STRING,
+                    description="Optional arguments to pass to the Python file.",
+                ),
+                description="Optional arguments to pass to the Python file.",
+            ),
+        },
+        required=["file_path"],
+    ),
+)
